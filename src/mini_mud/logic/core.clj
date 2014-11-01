@@ -40,3 +40,7 @@
         (swap! players-map assoc new-location #{new-player}))
       new-player)
     player))
+
+(defn get-location-info
+  [player]
+  (str (@players-map (:location player))))

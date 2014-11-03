@@ -1,80 +1,93 @@
 (ns mini-mud.logic.core)
 
-(def game-map {:location-ids #{1 2 3} :start-location-id 1})
+(def world
+  (ref {:locations-by-id
+        {1 {:id 1, :objects '(:lake), :neighbour-locations-ids {:north 2}, :players-ids #{}},
+         2 {:id 2, :objects '(:forrest), :neighbour-locations-ids {:north 3, :south 1}, :players-ids #{}},
+         3 {:id 3, :objects '(), :neighbour-locations-ids {:south 2}, :players-ids #{}}},
+        :start-location-id 1,
+        :players-by-id {}}))
 
-(def locations {1 {:id 1 :objects '(:lake) :neighbour-locations {:north 2}}
-                2 {:id 2 :objects '(:forrest) :neighbour-locations {:north 3 :south 1}}
-                3 {:id 3 :objects '() :neighbour-locations {:south 2}}})
+(defn get-location
+  [location-id]
+  (get-in @world [:locations-by-id location-id]))
 
-(def players-by-name (ref {}))
+(defn get-player
+  [player-id]
+  (get-in @world [:players-by-id player-id]))
 
-(def players-map (ref {}))
+(defn get-neighbour
+  [location direction]
+  (get-in @world [:locations-by-id (get-in location [:neighbour-locations-ids direction])]))
 
-(def players-sequence (ref 0))
+(defn get-player-location
+  [player]
+  (get-location (:location-id player)))
 
 (defn notify-player
   [player msg]
   ((:notifier player) msg))
 
-(defn generate-name []
-  (dosync
-   (str "игрок" (alter players-sequence inc))))
+(defn notify-location
+  [location msg]
+  (doseq [player-id (:players-ids location)
+          :let [player (get-player player-id)]]
+    (notify-player player msg)))
 
-(defn add-player [notifier]
-  (let [name (generate-name)
-        location (locations (:start-location-id game-map))
-        player {:name name :location location :notifier notifier}]
+(def players-sequence (ref 0))
+
+(defn generate-player-id!
+  []
+  (dosync
+   (alter players-sequence inc)))
+
+(defn add-player! [notifier]
+  (let [player-id (generate-player-id!)
+        name (str "игрок" player-id)
+        location-id (:start-location-id @world)
+        player {:id player-id, :name name, :location-id location-id, :notifier notifier}]
     (dosync
-     (alter players-by-name assoc name player)
-     (if (contains? @players-map location)
-       (alter players-map update-in [location] conj player)
-       (alter players-map assoc location #{player})))
+     (alter world assoc-in [:players-by-id player-id] player)
+     (alter world update-in [:locations-by-id location-id :players-ids] conj player-id))
     (println (str name " added"))
     player))
 
-(defn get-player-by-name
-  [name]
-  (players-by-name name))
-
 (defn get-location-info
-  [player]
-  (str (@players-map (:location player))))
+  [location]
+  (str location))
 
-(defn move-player
+(defn move-player!
   [player direction]
-  (if (contains? (:neighbour-locations (:location player)) direction)
-    (let [location (:location player)
-          new-location (locations ((:neighbour-locations location) direction))
-          new-player (assoc player :location new-location)]
+  (let [current-location (get-player-location player)]
+    (when-let [new-location (get-neighbour current-location direction)]
       (dosync
-       (alter players-by-name assoc (:name player) new-player)
-       (alter players-map update-in [location] disj player)
-       (if (contains? @players-map new-location)
-         (alter players-map update-in [new-location] conj new-player)
-         (alter players-map assoc new-location #{new-player})))
-      (notify-player new-player (get-location-info new-player))
-      new-player)
-                                        ;@TODO notify affected players
-    player))
+       (alter world assoc-in [:players-by-id (:id player) :location-id] (:id new-location))
+       (alter world update-in [:locations-by-id (:id current-location) :players-ids] disj (:id player))
+       (alter world update-in [:locations-by-id (:id new-location) :players-ids] conj (:id player)))
+                                        ;@FIXME
+      (notify-location (get-location (:id current-location)) (str "[" (:name player) " пошел на " direction "]"))
+      (notify-location (get-location (:id new-location)) (str "[" (:name player) " пришел]"))
+      (let [new-player (get-player (:id player))]
+        (notify-player new-player (get-location-info new-player))))))
 
 (defn say
   [player msg]
   (println "say")
   (let [display-msg (str (:name player) ": " msg)]
-    (doseq [neighbour-player (players-map (:location player))]
-      (notify-player neighbour-player display-msg))))
+    (notify-location (get-player-location player) display-msg)))
 
 (defn whisper
   [player to-player-name msg]
   (println "whisper")
-  (let [to-player (players-by-name to-player-name)
+  (let [to-player (first (filter #(= to-player-name (:name %)) (vals (:players-by-id @world))))
         display-msg (str (:name player) " шепчет: " msg)]
     (notify-player to-player display-msg)))
 
-(defn exit-player
+(defn exit-player!
   [player]
-  (dosync
-   (alter players-by-name dissoc (:name player))
-   (alter players-map update-in [(:location player)] disj player))
-                                        ;@TODO notify affected players
+  (let [location (get-player-location player)]
+    (dosync
+     (alter world update-in [:players-by-id] dissoc (:id player))
+     (alter world update-in [:locations-by-id (:id location) :players-ids] disj (:id player)))
+    (notify-location (get-location (:id location)) (str "[" (:name player) " вышел]")))
   (println (str (:name player) " exited")))

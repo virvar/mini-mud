@@ -4,16 +4,15 @@
   (:import [java.net ServerSocket Socket SocketException]
            [java.io InputStreamReader OutputStreamWriter BufferedReader]))
 
-(defn on-thread [f]
-  (doto (Thread. f) (.start)))
-
 (defn create-server
   [accept-socket port]
   (let [socket (ServerSocket. port)]
-    (on-thread #(when-not (.isClosed socket)
-                  (try (accept-socket (.accept socket))
-                       (catch SocketException e))
-                  (recur)))
+    (future (loop []
+              (when-not (.isClosed socket)
+                (try (accept-socket (.accept socket))
+                     (catch SocketException e
+                       (.close socket)))
+                (recur))))
     socket))
 
 (defn create-player-notifier
@@ -55,8 +54,8 @@
       (logic/exit-player (logic/get-player-by-name player-name)))))
 
 (defn handle-socket
-  [s]
-  (on-thread #(handle-client (.getInputStream s) (.getOutputStream s))))
+  [socket]
+  (future (handle-client (.getInputStream socket) (.getOutputStream socket))))
 
 (def server (create-server handle-socket 10100))
 

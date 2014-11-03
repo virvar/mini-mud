@@ -18,7 +18,7 @@
 
 (defn generate-name []
   (dosync
-   (str "player" (alter players-sequence inc))))
+   (str "игрок" (alter players-sequence inc))))
 
 (defn add-player [notifier]
   (let [name (generate-name)

@@ -10,12 +10,10 @@
 (defn create-server
   [accept-socket port]
   (let [socket (ServerSocket. port)]
-    (future (loop []
-              (when-not (.isClosed socket)
-                (try (accept-socket (.accept socket))
-                     (catch SocketException e
-                       (.close socket)))
-                (recur))))
+    (future (while (not (.isClosed socket))
+              (try (accept-socket (.accept socket))
+                   (catch SocketException e
+                     (.close socket)))))
     socket))
 
 (defn create-player-notifier
@@ -34,9 +32,9 @@
   (let [msg-words (str/split msg #" " 4)]
     (match [msg-words]
            [(["сказать" "пользователю" to-player-name & sending-message] :seq)]
-           (logic/whisper player to-player-name (str/join " " sending-message))
+           (logic/whisper-default player to-player-name (str/join " " sending-message))
            [(["сказать" & sending-message] :seq)]
-           (logic/say player (str/join " " sending-message))
+           (logic/say-default player (str/join " " sending-message))
            [([(location :guard location-command?)] :seq)]
            (logic/move-player! player (get locations-map location))
            [(["выход"] :seq)]
@@ -51,11 +49,11 @@
         player-id (:id (logic/add-player! (create-player-notifier writer)))]
     (binding [*in* reader]
       (loop [msg (read-line)]
-        (when-not (nil? msg)
-          (let [player (logic/get-player player-id)]
+        (when (some? msg)
+          (let [player (logic/get-player-default player-id)]
             (handle-message player msg)
             (recur (read-line)))))
-      (logic/exit-player! (logic/get-player player-id)))))
+      (logic/exit-player! (logic/get-player-default player-id)))))
 
 (defn handle-socket
   [socket]

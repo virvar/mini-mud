@@ -64,6 +64,7 @@
        (alter world assoc-in [:players-by-id (:id player) :location-id] (:id new-location))
        (alter world update-in [:locations-by-id (:id current-location) :players-ids] disj (:id player))
        (alter world update-in [:locations-by-id (:id new-location) :players-ids] conj (:id player)))
+      (println (str (:name player) " пошел на " direction))
                                         ;@FIXME
       (notify-location (get-location (:id current-location)) (str "[" (:name player) " пошел на " direction "]"))
       (notify-location (get-location (:id new-location)) (str "[" (:name player) " пришел]"))

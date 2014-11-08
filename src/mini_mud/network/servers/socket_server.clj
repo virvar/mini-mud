@@ -1,8 +1,11 @@
 (ns mini-mud.network.servers.socket-server
   (:require [clojure.string :as str]
             [mini-mud.logic.core :as logic] :reload-all)
+  (:use [clojure.core.match :only (match)])
   (:import [java.net ServerSocket Socket SocketException]
            [java.io InputStreamReader OutputStreamWriter BufferedReader]))
+
+(def locations-map {"север" :north, "юг" :south, "запад" :west, "восток" :east})
 
 (defn create-server
   [accept-socket port]
@@ -22,21 +25,23 @@
       (println msg)
       (flush))))
 
+(defn location-command?
+  [command]
+  (contains? locations-map command))
+
 (defn handle-message
   [player msg]
-  (cond
-   (re-matches #"сказать пользователю .*" msg)
-   (let [cmd (str/split msg #" " 4)
-         to-player-name (nth cmd 2)
-         player-msg (nth cmd 3)]
-     (logic/whisper player to-player-name player-msg))
-   (re-matches #"сказать .*" msg) (logic/say player (nth (str/split msg #" " 2) 1))
-   (= msg "север") (logic/move-player! player :north)
-   (= msg "юг") (logic/move-player! player :south)
-   (= msg "запад") (logic/move-player! player :west)
-   (= msg "восток") (logic/move-player! player :east)
-   (= msg "выход") (logic/exit-player! player)
-   :else "Неизвестная команда"))
+  (let [msg-words (str/split msg #" " 4)]
+    (match [msg-words]
+           [(["сказать" "пользователю" to-player-name & sending-message] :seq)]
+           (logic/whisper player to-player-name (str/join " " sending-message))
+           [(["сказать" & sending-message] :seq)]
+           (logic/say player (str/join " " sending-message))
+           [([(location :guard location-command?)] :seq)]
+           (logic/move-player! player (get locations-map location))
+           [(["выход"] :seq)]
+           (logic/exit-player! player)
+           :else "Неизвестная команда")))
 
 (defn handle-client
   [ins outs]

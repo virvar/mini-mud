@@ -1,14 +1,14 @@
 (ns mini-mud.network.servers.non-blocking-socket-server
-  (:import [java.nio ByteBuffer]
+  (:import [java.nio ByteBuffer CharBuffer]
            [java.nio.channels SelectionKey Selector ServerSocketChannel
             SocketChannel]
            [java.nio.charset Charset CharsetDecoder CharsetEncoder]))
 
+(def client-sequence (atom 0))
+
 (defn handle-connections
   [server accept-socket port]
-  (let [
-        ;server (ServerSocketChannel/open)
-        charset (Charset/forName "ISO-8859-1")
+  (let [charset (Charset/forName "ISO-8859-1")
         encoder (.newEncoder charset)
         decoder (.newDecoder charset)
         buffer (ByteBuffer/allocate 512)]
@@ -24,16 +24,25 @@
           (cond (.isAcceptable key)
                 (let [client (.accept server)]
                   (.configureBlocking client false)
-                  (println "new client")
-                  (.register client selector (bit-or SelectionKey/OP_READ
-                                                     SelectionKey/OP_WRITE)))
+                  (println "New client")
+                  (let [client-key (.register client selector SelectionKey/OP_READ)]
+                    (.attach client-key (swap! client-sequence inc))))
                 (.isReadable key)
-                (let [client (.channel key)]
-                  (println "readable")
-                  (.read client buffer)
-                  (let [msg (.toString (.decode decoder buffer))]
-                    (println msg))
-                  (.clear buffer))))
+                (let [client (.channel key)
+                      bytes-read (.read client buffer)]
+                  (if (= bytes-read -1)
+                    (do (.cancel key)
+                        (.close client)
+                        (println "Client exited"))
+                    (do
+                      (println "readable")
+                      (.flip buffer)
+                      (let [msg (.toString (.decode decoder buffer))
+                            client-id (.attachment key)
+                            response (str client-id ": " msg)]
+                        (.clear buffer)
+                        (.write client (.encode encoder (CharBuffer/wrap response)))
+                        (println msg)))))))
         (-> selector
             (.selectedKeys)
             (.clear))

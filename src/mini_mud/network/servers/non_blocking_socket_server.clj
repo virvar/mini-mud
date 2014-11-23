@@ -6,9 +6,13 @@
 
 (def client-sequence (atom 0))
 
+(defn- create-client-notifier
+  [client encoder]
+  (fn [msg] (.write client (.encode encoder (CharBuffer/wrap (str msg "\n"))))))
+
 (defn handle-connections
-  [server accept-socket port]
-  (let [charset (Charset/forName "ISO-8859-1")
+  [server port client-handler]
+  (let [charset (Charset/forName "UTF-8")
         encoder (.newEncoder charset)
         decoder (.newDecoder charset)
         buffer (ByteBuffer/allocate 512)]
@@ -18,52 +22,54 @@
     (println "bound to port")
     (let [selector (Selector/open)]
       (.register server selector SelectionKey/OP_ACCEPT)
-      (while (.isOpen selector)
+      (while (.isOpen server)
         (.select selector)
         (doseq [key (.selectedKeys selector)]
           (cond (.isAcceptable key)
                 (let [client (.accept server)]
                   (.configureBlocking client false)
                   (println "New client")
-                  (let [client-key (.register client selector SelectionKey/OP_READ)]
-                    (.attach client-key (swap! client-sequence inc))))
+                  (let [client-key (.register client selector SelectionKey/OP_READ)
+                        client-id (swap! client-sequence inc)]
+                    (.attach client-key client-id)
+                    ((:handle-connection client-handler)
+                     client-id
+                     (create-client-notifier client encoder))))
                 (.isReadable key)
                 (let [client (.channel key)
                       bytes-read (.read client buffer)]
                   (if (= bytes-read -1)
                     (do (.cancel key)
                         (.close client)
+                        (let [client-id (.attachment key)]
+                          ((:handle-disconnection client-handler) client-id))
                         (println "Client exited"))
                     (do
                       (println "readable")
                       (.flip buffer)
-                      (let [msg (.toString (.decode decoder buffer))
-                            client-id (.attachment key)
-                            response (str client-id ": " msg)]
+                      (let [raw-msg (.toString (.decode decoder buffer))
+                            msg (first (clojure.string/split-lines raw-msg))
+                            client-id (.attachment key)]
                         (.clear buffer)
-                        (.write client (.encode encoder (CharBuffer/wrap response)))
-                        (println msg)))))))
+                        (println msg)
+                        ((:handle-message client-handler) client-id msg)))))))
         (-> selector
             (.selectedKeys)
             (.clear))
-        (println "next iter")
-        (Thread/sleep 1000))
+        (println "next iter"))
+      (.close selector)
       (println "end"))))
 
 (defn- create-server
-  [accept-socket port]
-  (let [socket (ServerSocketChannel/open)]
-    (future (handle-connections socket accept-socket port))
-    socket))
+  [port client-handler]
+  (let [server (ServerSocketChannel/open)]
+    (future (handle-connections server port client-handler))
+    server))
 
 (defn run-server
   [port client-handler]
-  (create-server nil port))
+  (create-server port client-handler))
 
 (defn stop-server
   [server]
   (.close server))
-
-(def run (run-server 10100 nil))
-
-(stop-server run)

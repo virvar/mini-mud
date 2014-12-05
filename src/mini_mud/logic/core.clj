@@ -59,9 +59,9 @@
 (defn whisper
   [world player to-player-name msg]
   (println "whisper")
-  (let [to-player (first (filter #(= to-player-name (:name %)) (vals (:players-by-id world))))
-        display-msg (str (:name player) " шепчет: " msg)]
-    (notify-player to-player display-msg)))
+  (when-let [to-player (first (filter #(= to-player-name (:name %)) (vals (:players-by-id world))))]
+    (let [display-msg (str (:name player) " шепчет: " msg)]
+      (notify-player to-player display-msg))))
 
 (defn exit-player
   [world player]

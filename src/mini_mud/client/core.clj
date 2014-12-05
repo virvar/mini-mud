@@ -19,16 +19,21 @@
     (catch Exception e
       (println (.getMessage e)))))
 
+(defn- send-messages
+  [stream]
+  (loop [msg (read-line)]
+    (if (= msg "quit")
+      (println "quit")
+      (do @(mstream/put! stream msg)
+          (Thread/sleep 50)
+          (recur (read-line)))))
+  (mstream/close! stream))
+
 (defn- start
   [host port]
   (try (let [stream @(aleph.tcp/client {:host host, :port port})]
          (future (handle-messages stream))
-         (loop [msg (read-line)]
-           (if (= msg "quit")
-             (println "quit")
-             (do @(mstream/put! stream msg)
-                 (recur (read-line)))))
-         (mstream/close! stream))
+         (future (send-messages stream)))
        (catch Exception e
          (println (.getMessage e)))))
 

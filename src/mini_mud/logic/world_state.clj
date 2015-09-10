@@ -22,7 +22,7 @@
 
 (defn add-player! [notifier]
   (let [player-id (generate-player-id!)
-        name (str "игрок" player-id)]
+        name (str "player" player-id)]
     (swap! world logic/add-player player-id name notifier)
     (println (str name " added"))
     (get-player player-id)))
@@ -31,11 +31,11 @@
   [player direction]
   (let [new-world (swap! world logic/move-player player direction)
         new-player (logic/get-player new-world (:id player))]
-    (println (str (:name player) " пошел на " direction))
+    (println (str (:name player) " went to " direction))
     (logic/notify-location new-world (logic/get-player-location new-world player)
-                           (str "[" (:name player) " пошел на " direction "]"))
+                           (str "[" (:name player) " went to " direction "]"))
     (logic/notify-location new-world (logic/get-player-location new-world new-player)
-                           (str "[" (:name player) " пришел]"))
+                           (str "[" (:name player) " came]"))
     (logic/notify-player new-player (logic/get-location-info
                                      (logic/get-player-location new-world new-player)))))
 
@@ -53,5 +53,5 @@
         location (logic/get-player-location new-world player)]
     (logic/notify-location world
                            (logic/get-location world (:id location))
-                           (str "[" (:name player) " вышел]"))
+                           (str "[" (:name player) " exited]"))
     (println (str (:name player) " exited"))))

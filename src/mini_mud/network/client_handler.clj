@@ -5,7 +5,7 @@
 
 (def ^{:private true} players (atom {}))
 
-(def ^{:private true} locations-map {"север" :north, "юг" :south, "запад" :west, "восток" :east})
+(def ^{:private true} locations-map {"north" :north, "south" :south, "west" :west, "east" :east})
 
 (defn- location-command?
   [command]
@@ -19,17 +19,17 @@
 
 (defn- handle-player-message
   [player msg]
-  (let [msg-words (str/split msg #" " 4)]
+  (let [msg-words (str/split msg #" " 3)]
     (match [msg-words]
-           [["сказать" "пользователю" to-player-name & sending-message]]
+           [["sayto" to-player-name & sending-message]]
            (world/whisper player to-player-name (str/join " " sending-message))
-           [["сказать" & sending-message]]
+           [["say" & sending-message]]
            (world/say player (str/join " " sending-message))
            [[(location :guard location-command?)]]
            (world/move-player! player (get locations-map location))
-           [["выход"]]
+           [["exit"]]
            (world/exit-player! player)
-           :else "Неизвестная команда")))
+           :else "Uknown command")))
 
 (defn- handle-message
   [client-id msg]

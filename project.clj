@@ -8,4 +8,6 @@
                  [org.clojure/core.match "0.2.1"]
                  [aleph "0.4.0-alpha9"]
                  [manifold "0.1.0-beta3"]
-                 [byte-streams "0.2.0-alpha4"]])
+                 [byte-streams "0.2.0-alpha4"]]
+  :aot [mini-mud.core]
+  :main mini-mud.core)

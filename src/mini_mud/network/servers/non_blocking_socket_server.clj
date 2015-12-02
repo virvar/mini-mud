@@ -60,7 +60,7 @@
         buffer (ByteBuffer/allocate 512)]
     (println "socket created")
     (.configureBlocking server false)
-    (.bind (.socket server) (java.net.InetSocketAddress. "127.0.0.1" port))
+    (.bind (.socket server) (java.net.InetSocketAddress. port))
     (println "bound to port")
     (let [selector (Selector/open)]
       (.register server selector SelectionKey/OP_ACCEPT)
